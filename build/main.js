@@ -20,7 +20,8 @@ function isMinor(note) {
  * Split the minor notes from the first track a separate second track
  */
 function splitMinors(music) {
-    var splitTrack = music.length > 1 ? music[1] : MidiFunctions_1.addTrack(music);
+    var trackExists = music.length > 1;
+    var splitTrack = trackExists ? music[1] : MidiFunctions_1.addTrack(music);
     var toDelete = [];
     music[0].forEach(function (event) {
         if (event.isNoteOn() || event.isNoteOff()) {
@@ -29,8 +30,18 @@ function splitMinors(music) {
                 toDelete.push(event);
             }
         }
+        else {
+            // We don't know what's this; let's just add it to the other track, too.
+            if (!trackExists) {
+                splitTrack.add(event.tt, event);
+            }
+        }
     });
     MidiFunctions_1.removeEvents(music[0], toDelete);
+    if (music.type === 0) {
+        music.type = 1;
+        console.log("Set MIDI type from 0 to 1.");
+    }
     console.log("Moved", toDelete.length, "note events to the second track.");
 }
 function main() {

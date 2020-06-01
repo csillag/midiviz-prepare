@@ -13,6 +13,7 @@ export interface MIDIPlayer {
 }
 
 export interface SMF extends Array<MIDITrack> {
+  type: number;
   player(): MIDIPlayer;
   dump(): any;
 }
