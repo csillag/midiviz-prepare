@@ -16,8 +16,19 @@ But I didn't want to further fragment the already split landscape of the code. A
 
 So instead of that, I just created a small MIDI pre-processor utility, which is able to move the minor keys to a separate track, and thus achieve the desired coloring with the new version.
 
-## Usage
+## Installation
 
-Just run the app with the input output file names.
+Just install with npm. The command with appear in your normal npm binary directory.
 
+```
+npm install midiviz-prepare
+```
+
+## Usage 
+
+Just run it with the input output file names.
+
+```
+midiviz-prepare input.mid output.mid
+```
 
