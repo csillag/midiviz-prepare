@@ -11,6 +11,10 @@ export function loadMusic(fileName: string): SMF {
   return smf;
 }
 
+export function createMusic(type: number, tempo: number): SMF {
+  return new (JZZ.MIDI as any).SMF(type, tempo);
+}
+
 export function saveMusic(music: SMF, fileName: string) {
   fs.writeFileSync(fileName, music.dump(), "binary");
 }
@@ -21,8 +25,8 @@ export function addTrack(music: SMF): MIDITrack {
   return trk;
 }
 
-export function removeEvents(track: MIDITrack, events: MIDI[]) {
-  remove(track, (event) => events.indexOf(event) !== -1);
+export function removeEvents(track: MIDITrack, test: (event: MIDI) => boolean) {
+  remove(track, test);
 }
 
 export function describe(music: SMF) {

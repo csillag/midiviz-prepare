@@ -13,41 +13,47 @@ function parseArgs() {
     };
 }
 var minorNotes = [1, 3, 6, 8, 10];
-function isMinor(note) {
-    return minorNotes.indexOf(note % 12) !== -1;
-}
+var isMinor = function (note) { return minorNotes.indexOf(note % 12) !== -1; };
+var isMajor = function (note) { return !isMinor(note); };
+var isNote = function (event) { return event.isNoteOn() || event.isNoteOff(); };
+var isMinorNote = function (event) {
+    return isNote(event) && isMinor(event.getNote());
+};
+var isMajorNote = function (event) {
+    return isNote(event) && isMajor(event.getNote());
+};
 /**
  * Split the minor notes from the first track a separate second track
  */
 function splitMinors(music) {
-    var trackExists = music.length > 1;
-    var splitTrack = trackExists ? music[1] : MidiFunctions_1.addTrack(music);
-    var toDelete = [];
-    music[0].forEach(function (event) {
-        if (event.isNoteOn() || event.isNoteOff()) {
-            if (isMinor(event.getNote())) {
-                splitTrack.add(event.tt, event);
-                toDelete.push(event);
-            }
-        }
-        else {
-            // We don't know what's this; let's just add it to the other track, too.
-            if (!trackExists) {
-                splitTrack.add(event.tt, event);
-            }
-        }
+    // const keys = Object.keys(music);
+    // console.log("Objects in main scope: ", keys);
+    // keys
+    //   .filter((key) => key !== "0")
+    //   .forEach((key) => console.log(key, ":", music[key]));
+    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
+    var primaryTrack = MidiFunctions_1.addTrack(newMusic);
+    var secondaryTrack = MidiFunctions_1.addTrack(newMusic);
+    music[0]
+        .filter(function (event) { return isMajorNote(event); }) // !isMinorNote(event))
+        .forEach(function (event) {
+        primaryTrack.add(event.tt, event);
     });
-    MidiFunctions_1.removeEvents(music[0], toDelete);
-    if (music.type === 0) {
-        music.type = 1;
-        console.log("Set MIDI type from 0 to 1.");
-    }
-    console.log("Moved", toDelete.length, "note events to the second track.");
+    music[0]
+        .filter(function (event) { return isMinorNote(event); }) // !isMajorNote(event))
+        .forEach(function (event) {
+        secondaryTrack.add(event.tt, event);
+    });
+    console.log("Moved", primaryTrack.length, "major note events to primary track;", secondaryTrack.length, "minor note events to secondary track.");
+    return newMusic;
 }
 function main() {
     var args = parseArgs();
     var music = MidiFunctions_1.loadMusic(args.inputFileName);
-    splitMinors(music);
-    MidiFunctions_1.saveMusic(music, args.outputFileName);
+    if (music.length !== 1) {
+        throw new Error("Sorry, but I can only handle single-track MIDI files!");
+    }
+    var newMusic = splitMinors(music);
+    MidiFunctions_1.saveMusic(newMusic, args.outputFileName);
 }
 main();

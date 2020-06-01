@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.describe = exports.removeEvents = exports.addTrack = exports.saveMusic = exports.loadMusic = void 0;
+exports.describe = exports.removeEvents = exports.addTrack = exports.saveMusic = exports.createMusic = exports.loadMusic = void 0;
 var fs = require("fs");
 var JZZ = require("jzz");
 require("jzz-midi-smf")(JZZ);
@@ -11,6 +11,10 @@ function loadMusic(fileName) {
     return smf;
 }
 exports.loadMusic = loadMusic;
+function createMusic(type, tempo) {
+    return new JZZ.MIDI.SMF(type, tempo);
+}
+exports.createMusic = createMusic;
 function saveMusic(music, fileName) {
     fs.writeFileSync(fileName, music.dump(), "binary");
 }
@@ -21,8 +25,8 @@ function addTrack(music) {
     return trk;
 }
 exports.addTrack = addTrack;
-function removeEvents(track, events) {
-    remove(track, function (event) { return events.indexOf(event) !== -1; });
+function removeEvents(track, test) {
+    remove(track, test);
 }
 exports.removeEvents = removeEvents;
 function describe(music) {

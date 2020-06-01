@@ -3,7 +3,13 @@
 import process = require("process");
 
 import { SMF } from "./MidiTypes";
-import { addTrack, loadMusic, removeEvents, saveMusic } from "./MidiFunctions";
+import {
+  addTrack,
+  createMusic,
+  describe,
+  loadMusic,
+  saveMusic,
+} from "./MidiFunctions";
 import { MIDI } from "./JZZTypes";
 
 interface Parameters {
@@ -25,43 +31,57 @@ function parseArgs(): Parameters {
 
 const minorNotes = [1, 3, 6, 8, 10];
 
-function isMinor(note: number) {
-  return minorNotes.indexOf(note % 12) !== -1;
-}
+const isMinor = (note: number): boolean => minorNotes.indexOf(note % 12) !== -1;
+const isMajor = (note: number): boolean => !isMinor(note);
+
+const isNote = (event: MIDI): boolean => event.isNoteOn() || event.isNoteOff();
+
+const isMinorNote = (event: MIDI): boolean =>
+  isNote(event) && isMinor(event.getNote());
+
+const isMajorNote = (event: MIDI): boolean =>
+  isNote(event) && isMajor(event.getNote());
 
 /**
  * Split the minor notes from the first track a separate second track
  */
-function splitMinors(music: SMF) {
-  const trackExists = music.length > 1;
-  const splitTrack = trackExists ? music[1] : addTrack(music);
-  const toDelete: MIDI[] = [];
-  music[0].forEach((event) => {
-    if (event.isNoteOn() || event.isNoteOff()) {
-      if (isMinor(event.getNote())) {
-        splitTrack.add(event.tt, event);
-        toDelete.push(event);
-      }
-    } else {
-      // We don't know what's this; let's just add it to the other track, too.
-      if (!trackExists) {
-        splitTrack.add(event.tt, event);
-      }
-    }
-  });
-  removeEvents(music[0], toDelete);
-  if (music.type === 0) {
-    music.type = 1;
-    console.log("Set MIDI type from 0 to 1.");
-  }
-  console.log("Moved", toDelete.length, "note events to the second track.");
+function splitMinors(music: SMF): SMF {
+  // const keys = Object.keys(music);
+  // console.log("Objects in main scope: ", keys);
+  // keys
+  //   .filter((key) => key !== "0")
+  //   .forEach((key) => console.log(key, ":", music[key]));
+  const newMusic = createMusic(1, music.ppqn);
+  const primaryTrack = addTrack(newMusic);
+  const secondaryTrack = addTrack(newMusic);
+  music[0]
+    .filter((event) => isMajorNote(event)) // !isMinorNote(event))
+    .forEach((event) => {
+      primaryTrack.add(event.tt, event);
+    });
+  music[0]
+    .filter((event) => isMinorNote(event)) // !isMajorNote(event))
+    .forEach((event) => {
+      secondaryTrack.add(event.tt, event);
+    });
+  console.log(
+    "Moved",
+    primaryTrack.length,
+    "major note events to primary track;",
+    secondaryTrack.length,
+    "minor note events to secondary track."
+  );
+  return newMusic;
 }
 
 function main() {
   const args = parseArgs();
   const music = loadMusic(args.inputFileName);
-  splitMinors(music);
-  saveMusic(music, args.outputFileName);
+  if (music.length !== 1) {
+    throw new Error("Sorry, but I can only handle single-track MIDI files!");
+  }
+  const newMusic = splitMinors(music);
+  saveMusic(newMusic, args.outputFileName);
 }
 
 main();
