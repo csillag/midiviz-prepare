@@ -1,7 +1,7 @@
 {
   "name": "midiviz-prepare",
   "author": "Kristof Csillag <csillag.kristof@gmail.com>",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A preprocessor for MIDIVisualizer",
   "main": "build/main.js",
   "scripts": {
