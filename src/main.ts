@@ -3,13 +3,7 @@
 import process = require("process");
 
 import { SMF } from "./MidiTypes";
-import {
-  addTrack,
-  createMusic,
-  describe,
-  loadMusic,
-  saveMusic,
-} from "./MidiFunctions";
+import { addTrack, createMusic, loadMusic, saveMusic } from "./MidiFunctions";
 import { MIDI } from "./JZZTypes";
 
 interface Parameters {
