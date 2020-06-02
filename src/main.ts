@@ -15,17 +15,34 @@ import { MIDI } from "./JZZTypes";
 interface Parameters {
   inputFileName: string;
   outputFileName: string;
+  wantedStartTime?: number;
 }
 
-function parseArgs(): Parameters {
-  if (process.argv.length < 4) {
-    throw new Error(
-      "Missing parameters! Please submit input and output file name."
-    );
+function displayHelp() {
+  console.error("Usage:");
+  console.error();
+  console.error(
+    "midiviz-prepare",
+    "<input filename>",
+    "<output filename> [<wanted start time>]"
+  );
+}
+
+function parseArgs(): Parameters | undefined {
+  const { argv } = process;
+  const args = argv.length;
+  if (args < 4 || args > 5) {
+    displayHelp();
+    return;
+  }
+  let wantedStartTime: number | undefined;
+  if (args === 5) {
+    wantedStartTime = parseFloat(argv[4]);
   }
   return {
     inputFileName: process.argv[2],
     outputFileName: process.argv[3],
+    wantedStartTime,
   };
 }
 
@@ -43,27 +60,101 @@ const isMajorNote = (event: MIDI): boolean =>
   isNote(event) && isMajor(event.getNote());
 
 /**
- * Split the minor notes from the first track a separate second track
+ * Returns the minimum of two values that might be missing.
+ *
+ * The missing values are _not_ considered as a candidate.
+ * If both values are missing, undefined is returned.
  */
-function splitMinors(music: SMF): SMF {
-  // const keys = Object.keys(music);
-  // console.log("Objects in main scope: ", keys);
-  // keys
-  //   .filter((key) => key !== "0")
-  //   .forEach((key) => console.log(key, ":", music[key]));
-  const newMusic = createMusic(1, music.ppqn);
+function saneMin(a1: number, a2: number): number | undefined {
+  if (a1 === undefined) {
+    if (a2 === undefined) {
+      // None of the input values are defined; we have nothing better to do than returning undefined
+      return undefined;
+    } else {
+      // A1 is undefined, A2 is defined
+      return a2;
+    }
+  } else {
+    if (a2 === undefined) {
+      // A1 is defined, A2 is undefined
+      return a1;
+    } else {
+      // Both A1 and A2 are defined
+      return Math.min(a1, a2);
+    }
+  }
+}
+
+function main() {
+  // Parse the args
+  const args = parseArgs();
+  if (!args) {
+    return;
+  }
+  const { inputFileName, outputFileName, wantedStartTime } = args;
+
+  // Load the music
+  let music: SMF | undefined;
+  try {
+    music = loadMusic(inputFileName);
+  } catch (error) {
+    console.error("Error while reading specified input file:", error.message);
+    return;
+  }
+
+  // Do the processing
+  if (music.length !== 1) {
+    console.error("Sorry, but I can only handle single-track MIDI files!");
+    return;
+  }
+
+  const tempo = music.ppqn;
+
+  // Filter the notes
+  const majors = music[0].filter((event) => isMajorNote(event));
+  const minors = music[0].filter((event) => isMinorNote(event));
+
+  // Calculating required time adjustment
+  let timeOffset = 0;
+  if (wantedStartTime !== undefined) {
+    console.log("Tempo is:", tempo, "ticks per half second");
+    const tickLength = 0.5 / tempo;
+    const currentStartTicks = saneMin(majors[0]?.tt, minors[0]?.tt);
+    if (currentStartTicks === undefined) {
+      console.log("There are no notes; not doing time adjustment.");
+    } else {
+      const wantedStartTicks = wantedStartTime / tickLength;
+      timeOffset = wantedStartTicks - currentStartTicks;
+      console.log("Current start time:", currentStartTicks, "ticks");
+      console.log(
+        "Wanted start time:",
+        wantedStartTime,
+        "secs,",
+        wantedStartTicks,
+        "ticks"
+      );
+      console.log("Adjusting timestamps with", timeOffset, "ticks");
+    }
+  } else {
+    console.log("No time adjustment requested.");
+  }
+
+  // Create a new MIDI file
+  const newMusic = createMusic(1, tempo);
+
+  // Add the track for the major notes
   const primaryTrack = addTrack(newMusic);
+  majors.forEach((event) => {
+    primaryTrack.add(event.tt + timeOffset, event);
+  });
+
+  // Add the tract for the minor notes
   const secondaryTrack = addTrack(newMusic);
-  music[0]
-    .filter((event) => isMajorNote(event)) // !isMinorNote(event))
-    .forEach((event) => {
-      primaryTrack.add(event.tt, event);
-    });
-  music[0]
-    .filter((event) => isMinorNote(event)) // !isMajorNote(event))
-    .forEach((event) => {
-      secondaryTrack.add(event.tt, event);
-    });
+  minors.forEach((event) => {
+    secondaryTrack.add(event.tt + timeOffset, event);
+  });
+
+  // Log the results
   console.log(
     "Moved",
     primaryTrack.length,
@@ -71,17 +162,15 @@ function splitMinors(music: SMF): SMF {
     secondaryTrack.length,
     "minor note events to secondary track."
   );
-  return newMusic;
-}
 
-function main() {
-  const args = parseArgs();
-  const music = loadMusic(args.inputFileName);
-  if (music.length !== 1) {
-    throw new Error("Sorry, but I can only handle single-track MIDI files!");
+  // Save the result
+  try {
+    saveMusic(newMusic, outputFileName);
+    console.log("Output saved to", outputFileName);
+  } catch (error) {
+    console.error("Error while writing specified output file:", error.message);
+    return;
   }
-  const newMusic = splitMinors(music);
-  saveMusic(newMusic, args.outputFileName);
 }
 
 main();
