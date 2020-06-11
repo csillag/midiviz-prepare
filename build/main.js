@@ -81,14 +81,13 @@ function main() {
         return;
     }
     // Do the processing
-    if (music.length !== 1) {
-        console.error("Sorry, but I can only handle single-track MIDI files!");
-        return;
-    }
     var tempo = music.ppqn;
+    var allEvents = [];
+    music.forEach(function (track) { return track.forEach(function (event) { return allEvents.push(event); }); });
+    var sortedEvents = allEvents.sort(function (a, b) { return a.tt - b.tt; });
     // Filter the notes
-    var majors = music[0].filter(function (event) { return isMajorNote(event); });
-    var minors = music[0].filter(function (event) { return isMinorNote(event); });
+    var majors = sortedEvents.filter(function (event) { return isMajorNote(event); });
+    var minors = sortedEvents.filter(function (event) { return isMinorNote(event); });
     // Calculating required time adjustment
     var timeOffset = 0;
     if (wantedStartTime !== undefined) {

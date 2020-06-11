@@ -97,16 +97,16 @@ function main() {
   }
 
   // Do the processing
-  if (music.length !== 1) {
-    console.error("Sorry, but I can only handle single-track MIDI files!");
-    return;
-  }
 
   const tempo = music.ppqn;
 
+  const allEvents: MIDI[] = [];
+  music.forEach((track) => track.forEach((event) => allEvents.push(event)));
+  const sortedEvents = allEvents.sort((a, b) => a.tt - b.tt);
+
   // Filter the notes
-  const majors = music[0].filter((event) => isMajorNote(event));
-  const minors = music[0].filter((event) => isMinorNote(event));
+  const majors = sortedEvents.filter((event) => isMajorNote(event));
+  const minors = sortedEvents.filter((event) => isMinorNote(event));
 
   // Calculating required time adjustment
   let timeOffset = 0;

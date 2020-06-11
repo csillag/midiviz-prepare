@@ -1,14 +1,13 @@
 {
   "name": "midiviz-prepare",
   "author": "Kristof Csillag <csillag.kristof@gmail.com>",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A preprocessor for MIDIVisualizer",
   "main": "build/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
   "license": "ISC",
   "repository": "github:csillag/midiviz-prepare",
   "devDependencies": {
