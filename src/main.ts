@@ -47,11 +47,21 @@ const isMajor = (note: number): boolean => !isMinor(note);
 
 const isNote = (event: MIDI): boolean => event.isNoteOn() || event.isNoteOff();
 
-const isMinorNote = (event: MIDI): boolean =>
-  isNote(event) && isMinor(event.getNote());
+function belongsToMajorTrack(event: MIDI): boolean {
+  if (isNote(event)) {
+    return isMajor(event.getNote());
+  } else {
+    return event.isTempo() || event.isTimeSignature();
+  }
+}
 
-const isMajorNote = (event: MIDI): boolean =>
-  isNote(event) && isMajor(event.getNote());
+function belongsToMinorTrack(event: MIDI): boolean {
+  if (isNote(event)) {
+    return isMinor(event.getNote());
+  } else {
+    return event.isTempo() || event.isTimeSignature();
+  }
+}
 
 /**
  * Returns the minimum of two values that might be missing.
@@ -105,8 +115,8 @@ function main() {
   const sortedEvents = allEvents.sort((a, b) => a.tt - b.tt);
 
   // Filter the notes
-  const majors = sortedEvents.filter((event) => isMajorNote(event));
-  const minors = sortedEvents.filter((event) => isMinorNote(event));
+  const majors = sortedEvents.filter((event) => belongsToMajorTrack(event));
+  const minors = sortedEvents.filter((event) => belongsToMinorTrack(event));
 
   // Calculating required time adjustment
   let timeOffset = 0;

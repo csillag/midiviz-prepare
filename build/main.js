@@ -29,12 +29,22 @@ var minorNotes = [1, 3, 6, 8, 10];
 var isMinor = function (note) { return minorNotes.indexOf(note % 12) !== -1; };
 var isMajor = function (note) { return !isMinor(note); };
 var isNote = function (event) { return event.isNoteOn() || event.isNoteOff(); };
-var isMinorNote = function (event) {
-    return isNote(event) && isMinor(event.getNote());
-};
-var isMajorNote = function (event) {
-    return isNote(event) && isMajor(event.getNote());
-};
+function belongsToMajorTrack(event) {
+    if (isNote(event)) {
+        return isMajor(event.getNote());
+    }
+    else {
+        return event.isTempo() || event.isTimeSignature();
+    }
+}
+function belongsToMinorTrack(event) {
+    if (isNote(event)) {
+        return isMinor(event.getNote());
+    }
+    else {
+        return event.isTempo() || event.isTimeSignature();
+    }
+}
 /**
  * Returns the minimum of two values that might be missing.
  *
@@ -86,8 +96,8 @@ function main() {
     music.forEach(function (track) { return track.forEach(function (event) { return allEvents.push(event); }); });
     var sortedEvents = allEvents.sort(function (a, b) { return a.tt - b.tt; });
     // Filter the notes
-    var majors = sortedEvents.filter(function (event) { return isMajorNote(event); });
-    var minors = sortedEvents.filter(function (event) { return isMinorNote(event); });
+    var majors = sortedEvents.filter(function (event) { return belongsToMajorTrack(event); });
+    var minors = sortedEvents.filter(function (event) { return belongsToMinorTrack(event); });
     // Calculating required time adjustment
     var timeOffset = 0;
     if (wantedStartTime !== undefined) {
