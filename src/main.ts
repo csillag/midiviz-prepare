@@ -1,44 +1,12 @@
 #!/usr/bin/env node
 
+import { Command } from "commander";
+
 import process = require("process");
 
 import { SMF } from "./MidiTypes";
 import { addTrack, createMusic, loadMusic, saveMusic } from "./MidiFunctions";
 import { MIDI } from "./JZZTypes";
-
-interface Parameters {
-  inputFileName: string;
-  outputFileName: string;
-  wantedStartTime?: number;
-}
-
-function displayHelp() {
-  console.error("Usage:");
-  console.error();
-  console.error(
-    "midiviz-prepare",
-    "<input filename>",
-    "<output filename> [<wanted start time>]"
-  );
-}
-
-function parseArgs(): Parameters | undefined {
-  const { argv } = process;
-  const args = argv.length;
-  if (args < 4 || args > 5) {
-    displayHelp();
-    return;
-  }
-  let wantedStartTime: number | undefined;
-  if (args === 5) {
-    wantedStartTime = parseFloat(argv[4]);
-  }
-  return {
-    inputFileName: process.argv[2],
-    outputFileName: process.argv[3],
-    wantedStartTime,
-  };
-}
 
 const minorNotes = [1, 3, 6, 8, 10];
 
@@ -51,7 +19,12 @@ function belongsToMajorTrack(event: MIDI): boolean {
   if (isNote(event)) {
     return isMajor(event.getNote());
   } else {
-    return event.isTempo() || event.isTimeSignature();
+    // if (event.isTempo()) {
+    //   console.log("Passing on event", event.toString(), event[0]);
+    //   return true;
+    // }
+    // console.log("Swallowing", event.toString());
+    return false;
   }
 }
 
@@ -59,7 +32,8 @@ function belongsToMinorTrack(event: MIDI): boolean {
   if (isNote(event)) {
     return isMinor(event.getNote());
   } else {
-    return event.isTempo() || event.isTimeSignature();
+    //    return event.isTempo();
+    return false;
   }
 }
 
@@ -89,14 +63,11 @@ function saneMin(a1: number, a2: number): number | undefined {
   }
 }
 
-function main() {
-  // Parse the args
-  const args = parseArgs();
-  if (!args) {
-    return;
-  }
-  const { inputFileName, outputFileName, wantedStartTime } = args;
-
+function splitTracks(
+  inputFileName: string,
+  outputFileName: string,
+  wantedStartTime?: number
+) {
   // Load the music
   let music: SMF | undefined;
   try {
@@ -177,4 +148,153 @@ function main() {
   }
 }
 
-main();
+function addDelay(
+  inputFileName: string,
+  outputFileName: string,
+  delaySeconds: number
+) {
+  // Load the music
+  let music: SMF | undefined;
+  try {
+    music = loadMusic(inputFileName);
+  } catch (error) {
+    console.error("Error while reading specified input file:", error.message);
+    return;
+  }
+
+  // Create a new MIDI file
+  const newMusic = createMusic(1, music.ppqn);
+
+  let tempo: number;
+  let delta: number;
+
+  // Do the processing
+  music.forEach((track, trackIndex) => {
+    const newTrack = addTrack(newMusic);
+    tempo = music!.ppqn;
+    delta = delaySeconds * tempo * 2;
+    console.log(
+      "Parsing track",
+      trackIndex,
+      "staring with tempo",
+      tempo,
+      "which means a delta of",
+      delta,
+      "ticks.",
+      "( " + delaySeconds + " * " + tempo + " * 2 )"
+    );
+    let count = 0;
+    let started = false;
+
+    track.forEach((event) => {
+      // if (event.isNoteOn()) {
+      //   started = true;
+      // }
+      if (started) {
+        const newTime = event.tt + delta;
+        newTrack.add(newTime, event);
+        console.log(
+          "Moved event from",
+          event.tt,
+          "to",
+          newTime,
+          event.toString()
+        );
+        count += 1;
+      } else {
+        newTrack.add(event.tt, event);
+        console.log("Copied event as is", event.tt, event.toString());
+      }
+      if (event.isTempo()) {
+        tempo = event.getBPM();
+        delta = Math.round(delaySeconds * tempo * 2);
+        // console.log(
+        //   "Tempo is now",
+        //   tempo,
+        //   "which means a delta of",
+        //   delta,
+        //   "ticks."
+        // );
+      }
+    });
+    console.log("Adjusted", count, "events from this track.");
+  });
+
+  // Save the result
+  try {
+    saveMusic(newMusic, outputFileName);
+    console.log("Output saved to", outputFileName);
+  } catch (error) {
+    console.error("Error while writing specified output file:", error.message);
+    return;
+  }
+}
+
+function adjustTempo(
+  inputFileName: string,
+  outputFileName: string,
+  tempoRate: number
+) {
+  // Load the music
+  let music: SMF | undefined;
+  try {
+    music = loadMusic(inputFileName);
+  } catch (error) {
+    console.error("Error while reading specified input file:", error.message);
+    return;
+  }
+
+  const newTempo = music.ppqn * tempoRate;
+  console.log("New tempo is", music.ppqn, "*", tempoRate, "=", newTempo);
+  // Create a new MIDI file
+  const newMusic = createMusic(1, music.ppqn * tempoRate);
+
+  // Do the processing
+  music.forEach((track, trackIndex) => {
+    const newTrack = addTrack(newMusic);
+    console.log("Copying track", trackIndex);
+
+    track.forEach((event) => {
+      newTrack.add(event.tt, event);
+      if (event.isTempo()) {
+        console.log("oops. Tempo change event.", event.getBPM());
+      }
+    });
+  });
+
+  // Save the result
+  try {
+    saveMusic(newMusic, outputFileName);
+    console.log("Output saved to", outputFileName);
+  } catch (error) {
+    console.error("Error while writing specified output file:", error.message);
+    return;
+  }
+}
+
+const APP_NAME = "midiviz-prepare";
+
+const program = new Command(APP_NAME);
+
+program.version("0.0.14");
+
+program
+  .command("split-tracks <input-midi-file> <outout-pidi-file>")
+  .description("Split the major and minor notes to two separate tracks.")
+  .option("--adjust-start <seconds>", "adjust the timing of the first event")
+  .action((inputMidiFile: string, outputMidiFile: string, options: any) => {
+    const { adjustStart } = options;
+    splitTracks(inputMidiFile, outputMidiFile, adjustStart);
+  });
+
+program
+  .command("add-delay <input-midi-file> <outout-pidi-file> <seconds>")
+  .description("Add some delay to the whole file.")
+  .action(addDelay);
+
+program
+  .command("adjust-tempo <input-midi-file> <outout-pidi-file> <rate>")
+  .description("Adjust the tempo of the whole file.")
+  .action(adjustTempo);
+
+program.parse(process.argv);

@@ -1,30 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var commander_1 = require("commander");
 var process = require("process");
 var MidiFunctions_1 = require("./MidiFunctions");
-function displayHelp() {
-    console.error("Usage:");
-    console.error();
-    console.error("midiviz-prepare", "<input filename>", "<output filename> [<wanted start time>]");
-}
-function parseArgs() {
-    var argv = process.argv;
-    var args = argv.length;
-    if (args < 4 || args > 5) {
-        displayHelp();
-        return;
-    }
-    var wantedStartTime;
-    if (args === 5) {
-        wantedStartTime = parseFloat(argv[4]);
-    }
-    return {
-        inputFileName: process.argv[2],
-        outputFileName: process.argv[3],
-        wantedStartTime: wantedStartTime,
-    };
-}
 var minorNotes = [1, 3, 6, 8, 10];
 var isMinor = function (note) { return minorNotes.indexOf(note % 12) !== -1; };
 var isMajor = function (note) { return !isMinor(note); };
@@ -34,7 +13,12 @@ function belongsToMajorTrack(event) {
         return isMajor(event.getNote());
     }
     else {
-        return event.isTempo() || event.isTimeSignature();
+        // if (event.isTempo()) {
+        //   console.log("Passing on event", event.toString(), event[0]);
+        //   return true;
+        // }
+        // console.log("Swallowing", event.toString());
+        return false;
     }
 }
 function belongsToMinorTrack(event) {
@@ -42,7 +26,8 @@ function belongsToMinorTrack(event) {
         return isMinor(event.getNote());
     }
     else {
-        return event.isTempo() || event.isTimeSignature();
+        //    return event.isTempo();
+        return false;
     }
 }
 /**
@@ -73,14 +58,8 @@ function saneMin(a1, a2) {
         }
     }
 }
-function main() {
+function splitTracks(inputFileName, outputFileName, wantedStartTime) {
     var _a, _b;
-    // Parse the args
-    var args = parseArgs();
-    if (!args) {
-        return;
-    }
-    var inputFileName = args.inputFileName, outputFileName = args.outputFileName, wantedStartTime = args.wantedStartTime;
     // Load the music
     var music;
     try {
@@ -142,4 +121,118 @@ function main() {
         return;
     }
 }
-main();
+function addDelay(inputFileName, outputFileName, delaySeconds) {
+    // Load the music
+    var music;
+    try {
+        music = MidiFunctions_1.loadMusic(inputFileName);
+    }
+    catch (error) {
+        console.error("Error while reading specified input file:", error.message);
+        return;
+    }
+    // Create a new MIDI file
+    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
+    var tempo;
+    var delta;
+    // Do the processing
+    music.forEach(function (track, trackIndex) {
+        var newTrack = MidiFunctions_1.addTrack(newMusic);
+        tempo = music.ppqn;
+        delta = delaySeconds * tempo * 2;
+        console.log("Parsing track", trackIndex, "staring with tempo", tempo, "which means a delta of", delta, "ticks.", "( " + delaySeconds + " * " + tempo + " * 2 )");
+        var count = 0;
+        var started = false;
+        track.forEach(function (event) {
+            // if (event.isNoteOn()) {
+            //   started = true;
+            // }
+            if (started) {
+                var newTime = event.tt + delta;
+                newTrack.add(newTime, event);
+                console.log("Moved event from", event.tt, "to", newTime, event.toString());
+                count += 1;
+            }
+            else {
+                newTrack.add(event.tt, event);
+                console.log("Copied event as is", event.tt, event.toString());
+            }
+            if (event.isTempo()) {
+                tempo = event.getBPM();
+                delta = Math.round(delaySeconds * tempo * 2);
+                // console.log(
+                //   "Tempo is now",
+                //   tempo,
+                //   "which means a delta of",
+                //   delta,
+                //   "ticks."
+                // );
+            }
+        });
+        console.log("Adjusted", count, "events from this track.");
+    });
+    // Save the result
+    try {
+        MidiFunctions_1.saveMusic(newMusic, outputFileName);
+        console.log("Output saved to", outputFileName);
+    }
+    catch (error) {
+        console.error("Error while writing specified output file:", error.message);
+        return;
+    }
+}
+function adjustTempo(inputFileName, outputFileName, tempoRate) {
+    // Load the music
+    var music;
+    try {
+        music = MidiFunctions_1.loadMusic(inputFileName);
+    }
+    catch (error) {
+        console.error("Error while reading specified input file:", error.message);
+        return;
+    }
+    var newTempo = music.ppqn * tempoRate;
+    console.log("New tempo is", music.ppqn, "*", tempoRate, "=", newTempo);
+    // Create a new MIDI file
+    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn * tempoRate);
+    // Do the processing
+    music.forEach(function (track, trackIndex) {
+        var newTrack = MidiFunctions_1.addTrack(newMusic);
+        console.log("Copying track", trackIndex);
+        track.forEach(function (event) {
+            newTrack.add(event.tt, event);
+            if (event.isTempo()) {
+                console.log("oops. Tempo change event.", event.getBPM());
+            }
+        });
+    });
+    // Save the result
+    try {
+        MidiFunctions_1.saveMusic(newMusic, outputFileName);
+        console.log("Output saved to", outputFileName);
+    }
+    catch (error) {
+        console.error("Error while writing specified output file:", error.message);
+        return;
+    }
+}
+var APP_NAME = "midiviz-prepare";
+var program = new commander_1.Command(APP_NAME);
+program.version("0.0.14");
+program
+    .command("split-tracks <input-midi-file> <outout-pidi-file>")
+    .description("Split the major and minor notes to two separate tracks.")
+    .option("--adjust-start <seconds>", "adjust the timing of the first event")
+    .action(function (inputMidiFile, outputMidiFile, options) {
+    var adjustStart = options.adjustStart;
+    splitTracks(inputMidiFile, outputMidiFile, adjustStart);
+});
+program
+    .command("add-delay <input-midi-file> <outout-pidi-file> <seconds>")
+    .description("Add some delay to the whole file.")
+    .action(addDelay);
+program
+    .command("adjust-tempo <input-midi-file> <outout-pidi-file> <rate>")
+    .description("Adjust the tempo of the whole file.")
+    .action(adjustTempo);
+program.parse(process.argv);

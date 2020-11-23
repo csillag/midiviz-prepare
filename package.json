@@ -1,7 +1,7 @@
 {
   "name": "midiviz-prepare",
   "author": "Kristof Csillag <csillag.kristof@gmail.com>",
-  "version": "0.0.7",
+  "version": "0.0.14",
   "description": "A preprocessor for MIDIVisualizer",
   "main": "build/main.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "typescript": "3.9.3"
   },
   "dependencies": {
+    "commander": "5.1.0",
     "jzz-midi-smf": "^1.3.5",
     "lodash.remove": "4.7.0"
   },
