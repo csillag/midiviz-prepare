@@ -191,19 +191,16 @@ function adjustTempo(inputFileName, outputFileName, tempoRate) {
         console.error("Error while reading specified input file:", error.message);
         return;
     }
-    var newTempo = music.ppqn * tempoRate;
-    console.log("New tempo is", music.ppqn, "*", tempoRate, "=", newTempo);
     // Create a new MIDI file
-    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn * tempoRate);
+    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
     // Do the processing
     music.forEach(function (track, trackIndex) {
         var newTrack = MidiFunctions_1.addTrack(newMusic);
         console.log("Copying track", trackIndex);
         track.forEach(function (event) {
-            newTrack.add(event.tt, event);
-            if (event.isTempo()) {
-                console.log("oops. Tempo change event.", event.getBPM());
-            }
+            var newTime = Math.round(event.tt / tempoRate);
+            newTrack.add(newTime, event);
+            // console.log("Event timestamp is", event.tt);
         });
     });
     // Save the result

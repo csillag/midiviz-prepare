@@ -244,10 +244,8 @@ function adjustTempo(
     return;
   }
 
-  const newTempo = music.ppqn * tempoRate;
-  console.log("New tempo is", music.ppqn, "*", tempoRate, "=", newTempo);
   // Create a new MIDI file
-  const newMusic = createMusic(1, music.ppqn * tempoRate);
+  const newMusic = createMusic(1, music.ppqn);
 
   // Do the processing
   music.forEach((track, trackIndex) => {
@@ -255,10 +253,9 @@ function adjustTempo(
     console.log("Copying track", trackIndex);
 
     track.forEach((event) => {
-      newTrack.add(event.tt, event);
-      if (event.isTempo()) {
-        console.log("oops. Tempo change event.", event.getBPM());
-      }
+      const newTime = Math.round(event.tt / tempoRate);
+      newTrack.add(newTime, event);
+      // console.log("Event timestamp is", event.tt);
     });
   });
 
