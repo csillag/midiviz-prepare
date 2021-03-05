@@ -213,6 +213,145 @@ function adjustTempo(inputFileName, outputFileName, tempoRate) {
         return;
     }
 }
+function cut(inputFileName, outputFileName, startSeconds, endSeconds) {
+    // Load the music
+    var music;
+    try {
+        music = MidiFunctions_1.loadMusic(inputFileName);
+    }
+    catch (error) {
+        console.error("Error while reading specified input file:", error.message);
+        return;
+    }
+    var pulsesPerQuarterNote = music.ppqn;
+    console.log("PPQN is", pulsesPerQuarterNote);
+    // Create a new MIDI file
+    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
+    // Do the processing
+    music.forEach(function (track, trackIndex) {
+        var newTrack = MidiFunctions_1.addTrack(newMusic);
+        console.log("Copying track", trackIndex);
+        var tickDuration = NaN;
+        var lastTime = 0;
+        var droppedNotes = 0;
+        var usedNotes = 0;
+        track.forEach(function (event) {
+            if (event.isTempo()) {
+                if (!isNaN(tickDuration)) {
+                    console.log("oops. We are having a time change within the track. Expect trouble.");
+                }
+                var microsecondsPerQuarterNote = event.getTempo();
+                tickDuration = microsecondsPerQuarterNote / pulsesPerQuarterNote;
+                // console.log(
+                //   "Starting with tick",
+                //   event.tt,
+                //   "tempo is",
+                //   event.getTempo(),
+                //   "ms / quarter note, so one tick means",
+                //   tickDuration,
+                //   "micro seconds."
+                // );
+            }
+            var seconds = (event.tt * tickDuration) / 1000000;
+            var tooEarly = seconds < startSeconds;
+            var tooLate = !!endSeconds && seconds > endSeconds;
+            if (event.isNoteOn() || MidiFunctions_1.isAfterTouch(event) || event.isNoteOff()) {
+                // Normal musical event
+                if (tooEarly) {
+                    if (event.isNoteOn()) {
+                        droppedNotes++;
+                    }
+                    // Too early, we are dropping this
+                    // console.log(
+                    //   "Dropped musical event from",
+                    //   seconds,
+                    //   "seconds (too early)"
+                    // );
+                }
+                else if (tooLate) {
+                    if (event.isNoteOn()) {
+                        droppedNotes++;
+                    }
+                    // console.log(
+                    //   "Dropped musical event from",
+                    //   seconds,
+                    //   "seconds (too late)"
+                    // );
+                }
+                else {
+                    if (event.isNoteOn()) {
+                        usedNotes++;
+                    }
+                    // This event is within the specified timeframe, so we will have to add it.
+                    // Do we have to modify the time?
+                    if (startSeconds) {
+                        // Yes, we will have to decrease the time a little bit
+                        var newSeconds = seconds - startSeconds;
+                        var newTicks = (newSeconds * 1000000) / tickDuration;
+                        // console.log(
+                        //   "Adding musical event at",
+                        //   newSeconds,
+                        //   "seconds, instead of the original",
+                        //   seconds,
+                        //   "seconds"
+                        // );
+                        newTrack.add(newTicks, event);
+                        lastTime = newTicks;
+                    }
+                    else {
+                        // Nah, we can add this vanilla
+                        newTrack.add(event.tt, event);
+                        lastTime = event.tt;
+                    }
+                }
+            }
+            else {
+                // Control event. We can't drop this,
+                if (tooEarly || tooLate) {
+                    // We can't drop control events
+                    // so let's cram it to the end of the track without changing the time too much
+                    lastTime += 1;
+                    newTrack.add(lastTime, event);
+                    // console.log("Cramming in control event", event.toString());
+                }
+                else {
+                    // This event is within the specified timeframe, so we will have to add it.
+                    // Do we have to modify the time?
+                    if (startSeconds) {
+                        // Yes, we will have to decrease the time a little bit
+                        var newSeconds = seconds - startSeconds;
+                        var newTicks = (newSeconds * 1000000) / tickDuration;
+                        // console.log(
+                        //   "Adding special event at",
+                        //   newSeconds,
+                        //   "seconds, instead of the original",
+                        //   seconds,
+                        //   "seconds"
+                        // );
+                        newTrack.add(newTicks, event);
+                        lastTime = newTicks;
+                    }
+                    else {
+                        // Nah, we can add this vanilla
+                        newTrack.add(event.tt, event);
+                        lastTime = event.tt;
+                        console.log("Added special event at", event.tt, seconds, event.toString(), event[0]);
+                    }
+                }
+            }
+        });
+        console.log("Track statistics: used", usedNotes, "notes; dropped", droppedNotes, "notes.");
+    });
+    // Save the result
+    try {
+        MidiFunctions_1.saveMusic(newMusic, outputFileName);
+        console.log("Output saved to", outputFileName);
+    }
+    catch (error) {
+        console.error("Error while writing specified output file:", error.message);
+        return;
+    }
+}
 var APP_NAME = "midiviz-prepare";
 var program = new commander_1.Command(APP_NAME);
 program.version("0.0.14");
@@ -232,4 +371,8 @@ program
     .command("adjust-tempo <input-midi-file> <outout-pidi-file> <rate>")
     .description("Adjust the tempo of the whole file.")
     .action(adjustTempo);
+program
+    .command("cut-segment <input-midi-file> <output-midi-file> <start-seconds> [end-seconds]")
+    .description("Cut out the wanted segment of the file. (Drop the beginning and the end.)")
+    .action(cut);
 program.parse(process.argv);

@@ -38,3 +38,7 @@ export function describe(music: SMF) {
   console.log("Duration:", player.duration(), "ticks");
   console.log("Total time:", player.durationMS(), "milliseconds");
 }
+
+export function isAfterTouch(event: MIDI) {
+  return event[0] === 160;
+}
