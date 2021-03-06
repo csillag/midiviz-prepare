@@ -331,7 +331,12 @@ function cut(
       const seconds = (event.tt * tickDuration) / 1000000;
       const tooEarly = seconds < startSeconds;
       const tooLate = !!endSeconds && seconds > endSeconds;
-      if (event.isNoteOn() || isAfterTouch(event) || event.isNoteOff()) {
+      if (
+        event.isNoteOn() ||
+        isAfterTouch(event) ||
+        event.isNoteOff() ||
+        isPedal(event)
+      ) {
         // Normal musical event
         if (tooEarly) {
           if (event.isNoteOn()) {

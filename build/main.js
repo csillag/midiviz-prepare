@@ -257,7 +257,10 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
             var seconds = (event.tt * tickDuration) / 1000000;
             var tooEarly = seconds < startSeconds;
             var tooLate = !!endSeconds && seconds > endSeconds;
-            if (event.isNoteOn() || MidiFunctions_1.isAfterTouch(event) || event.isNoteOff()) {
+            if (event.isNoteOn() ||
+                MidiFunctions_1.isAfterTouch(event) ||
+                event.isNoteOff() ||
+                MidiFunctions_1.isPedal(event)) {
                 // Normal musical event
                 if (tooEarly) {
                     if (event.isNoteOn()) {
