@@ -349,6 +349,33 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
         return;
     }
 }
+function dump(inputFileName) {
+    // Load the music
+    var music;
+    try {
+        music = MidiFunctions_1.loadMusic(inputFileName);
+    }
+    catch (error) {
+        console.error("Error while reading specified input file:", error.message);
+        return;
+    }
+    var pulsesPerQuarterNote = music.ppqn;
+    music.forEach(function (track, trackIndex) {
+        console.log("Track", trackIndex);
+        var tickDuration = NaN;
+        track.forEach(function (event) {
+            if (event.isTempo()) {
+                if (!isNaN(tickDuration)) {
+                    console.log("oops. We are having a time change within the track. Expect trouble.");
+                }
+                var microsecondsPerQuarterNote = event.getTempo();
+                tickDuration = microsecondsPerQuarterNote / pulsesPerQuarterNote;
+            }
+            var seconds = (event.tt * tickDuration) / 1000000;
+            console.log(seconds, event.toString());
+        });
+    });
+}
 var APP_NAME = "midiviz-prepare";
 var program = new commander_1.Command(APP_NAME);
 program.version("0.0.14");
@@ -376,4 +403,8 @@ program
     var adjustStart = options.adjustStart;
     cut(inputFileName, outputFileName, startSeconds, endSeconds, adjustStart);
 });
+program
+    .command("dump <input-midi-file>")
+    .description("Dump MIDI events in text format")
+    .action(dump);
 program.parse(process.argv);
