@@ -279,7 +279,8 @@ function cut(
   inputFileName: string,
   outputFileName: string,
   startSeconds: number,
-  endSeconds: number
+  endSeconds: number,
+  wantedStartTime = 1
 ) {
   // Load the music
   let music: SMF | undefined;
@@ -291,7 +292,7 @@ function cut(
   }
 
   const pulsesPerQuarterNote = music!.ppqn;
-  console.log("PPQN is", pulsesPerQuarterNote);
+  // console.log("PPQN is", pulsesPerQuarterNote);
 
   // Create a new MIDI file
   const newMusic = createMusic(1, music.ppqn);
@@ -305,6 +306,7 @@ function cut(
     let lastTime = 0;
     let droppedNotes = 0;
     let usedNotes = 0;
+    let neededOffset: number | undefined;
     track.forEach((event) => {
       if (event.isTempo()) {
         if (!isNaN(tickDuration)) {
@@ -354,25 +356,25 @@ function cut(
             usedNotes++;
           }
           // This event is within the specified timeframe, so we will have to add it.
-          // Do we have to modify the time?
-          if (startSeconds) {
-            // Yes, we will have to decrease the time a little bit
-            const newSeconds = seconds - startSeconds;
-            const newTicks = (newSeconds * 1000000) / tickDuration;
-            // console.log(
-            //   "Adding musical event at",
-            //   newSeconds,
-            //   "seconds, instead of the original",
-            //   seconds,
-            //   "seconds"
-            // );
-            newTrack.add(newTicks, event);
-            lastTime = newTicks;
-          } else {
-            // Nah, we can add this vanilla
-            newTrack.add(event.tt, event);
-            lastTime = event.tt;
+
+          // We will have to adjust the time a little bit
+          if (neededOffset === undefined) {
+            // This is the first sound, let's set a good affset
+            neededOffset = wantedStartTime - seconds;
           }
+          const newSeconds = seconds + neededOffset;
+          const newTicks = (newSeconds * 1000000) / tickDuration;
+          // console.log(
+          //   "Adding musical event at",
+          //   newTicks,
+          //   newSeconds,
+          //   "seconds, instead of the original",
+          //   seconds,
+          //   "seconds",
+          //   event.toString()
+          // );
+          newTrack.add(newTicks, event);
+          lastTime = newTicks;
         }
       } else {
         // Control event. We can't drop this,
@@ -380,37 +382,31 @@ function cut(
         if (tooEarly || tooLate) {
           // We can't drop control events
           // so let's cram it to the end of the track without changing the time too much
-          lastTime += 1;
           newTrack.add(lastTime, event);
           // console.log("Cramming in control event", event.toString());
         } else {
           // This event is within the specified timeframe, so we will have to add it.
           // Do we have to modify the time?
-          if (startSeconds) {
-            // Yes, we will have to decrease the time a little bit
-            const newSeconds = seconds - startSeconds;
-            const newTicks = (newSeconds * 1000000) / tickDuration;
-            // console.log(
-            //   "Adding special event at",
-            //   newSeconds,
-            //   "seconds, instead of the original",
-            //   seconds,
-            //   "seconds"
-            // );
-            newTrack.add(newTicks, event);
-            lastTime = newTicks;
-          } else {
-            // Nah, we can add this vanilla
-            newTrack.add(event.tt, event);
-            lastTime = event.tt;
-            console.log(
-              "Added special event at",
-              event.tt,
-              seconds,
-              event.toString(),
-              event[0]
-            );
+
+          // We will have to adjust the time a little bit
+
+          // We will have to adjust the time a little bit
+          if (neededOffset === undefined) {
+            // This is the first sound, let's set a good affset
+            neededOffset = wantedStartTime - seconds;
           }
+          const newSeconds = seconds + neededOffset;
+
+          const newTicks = (newSeconds * 1000000) / tickDuration;
+          // console.log(
+          //   "Adding special event at",
+          //   newSeconds,
+          //   "seconds, instead of the original",
+          //   seconds,
+          //   "seconds"
+          // );
+          newTrack.add(newTicks, event);
+          lastTime = newTicks;
         }
       }
     });
@@ -421,6 +417,7 @@ function cut(
       droppedNotes,
       "notes."
     );
+    console.log("Music now starts at", wantedStartTime, "seconds.");
   });
 
   // Save the result
@@ -465,6 +462,18 @@ program
   .description(
     "Cut out the wanted segment of the file. (Drop the beginning and the end.)"
   )
-  .action(cut);
+  .option("--adjust-start <seconds>", "adjust the timing of the first event")
+  .action(
+    (
+      inputFileName: string,
+      outputFileName: string,
+      startSeconds: number,
+      endSeconds: number,
+      options: any
+    ) => {
+      const { adjustStart } = options;
+      cut(inputFileName, outputFileName, startSeconds, endSeconds, adjustStart);
+    }
+  );
 
 program.parse(process.argv);
