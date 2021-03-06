@@ -9,6 +9,7 @@ import {
   addTrack,
   createMusic,
   isAfterTouch,
+  isPedal,
   loadMusic,
   saveMusic,
 } from "./MidiFunctions";
@@ -461,6 +462,27 @@ function dump(inputFileName: string) {
   });
 }
 
+function hasPedal(inputFileName: string) {
+  // Load the music
+  let music: SMF | undefined;
+  try {
+    music = loadMusic(inputFileName);
+  } catch (error) {
+    console.error("Error while reading specified input file:", error.message);
+    return;
+  }
+
+  let found = false;
+  music.forEach((track) => {
+    track.forEach((event) => {
+      if (isPedal(event)) {
+        found = true;
+      }
+    });
+  });
+  return found;
+}
+
 const APP_NAME = "midiviz-prepare";
 
 const program = new Command(APP_NAME);
@@ -511,5 +533,13 @@ program
   .command("dump <input-midi-file>")
   .description("Dump MIDI events in text format")
   .action(dump);
+
+program
+  .command("has-pedal <input-midi-file>")
+  .description("Checks whether a MIDI sequence contains pedal events")
+  .action((inputMidiFile) => {
+    const pedal = hasPedal(inputMidiFile);
+    console.log(pedal);
+  });
 
 program.parse(process.argv);

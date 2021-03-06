@@ -376,6 +376,26 @@ function dump(inputFileName) {
         });
     });
 }
+function hasPedal(inputFileName) {
+    // Load the music
+    var music;
+    try {
+        music = MidiFunctions_1.loadMusic(inputFileName);
+    }
+    catch (error) {
+        console.error("Error while reading specified input file:", error.message);
+        return;
+    }
+    var found = false;
+    music.forEach(function (track) {
+        track.forEach(function (event) {
+            if (MidiFunctions_1.isPedal(event)) {
+                found = true;
+            }
+        });
+    });
+    return found;
+}
 var APP_NAME = "midiviz-prepare";
 var program = new commander_1.Command(APP_NAME);
 program.version("0.0.14");
@@ -407,4 +427,11 @@ program
     .command("dump <input-midi-file>")
     .description("Dump MIDI events in text format")
     .action(dump);
+program
+    .command("has-pedal <input-midi-file>")
+    .description("Checks whether a MIDI sequence contains pedal events")
+    .action(function (inputMidiFile) {
+    var pedal = hasPedal(inputMidiFile);
+    console.log(pedal);
+});
 program.parse(process.argv);

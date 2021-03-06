@@ -42,3 +42,7 @@ export function describe(music: SMF) {
 export function isAfterTouch(event: MIDI) {
   return event[0] === 160;
 }
+
+export function isPedal(event: MIDI) {
+  return event[0] === 176;
+}
