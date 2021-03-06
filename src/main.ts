@@ -480,7 +480,7 @@ function hasPedal(inputFileName: string) {
       }
     });
   });
-  return found;
+  return found ? "1" : "0";
 }
 
 const APP_NAME = "midiviz-prepare";

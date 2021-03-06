@@ -394,7 +394,7 @@ function hasPedal(inputFileName) {
             }
         });
     });
-    return found;
+    return found ? "1" : "0";
 }
 var APP_NAME = "midiviz-prepare";
 var program = new commander_1.Command(APP_NAME);
