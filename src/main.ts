@@ -298,6 +298,8 @@ function cut(
   // Create a new MIDI file
   const newMusic = createMusic(1, music.ppqn);
 
+  // console.log("Cutting segment [", startSeconds, "-", endSeconds, "]...");
+
   // Do the processing
   music.forEach((track, trackIndex) => {
     const newTrack = addTrack(newMusic);
@@ -328,9 +330,19 @@ function cut(
         // );
       }
 
-      const seconds = (event.tt * tickDuration) / 1000000;
+      const seconds = event.tt ? (event.tt * tickDuration) / 1000000 : 0;
       const tooEarly = seconds < startSeconds;
       const tooLate = !!endSeconds && seconds > endSeconds;
+      // console.log(
+      //   "Looking at event at",
+      //   event.tt,
+      //   "ticks,",
+      //   seconds,
+      //   "seconds. Too early?",
+      //   tooEarly,
+      //   "Too late?",
+      //   tooLate
+      // );
       if (
         event.isNoteOn() ||
         isAfterTouch(event) ||
@@ -367,6 +379,14 @@ function cut(
           if (neededOffset === undefined) {
             // This is the first sound, let's set a good affset
             neededOffset = wantedStartTime - seconds;
+            console.log(
+              "Since we wanted to start at",
+              wantedStartTime,
+              "sec, and we have found the first sound at",
+              seconds,
+              ", we are setting an offset of",
+              neededOffset
+            );
           }
           const newSeconds = seconds + neededOffset;
           const newTicks = (newSeconds * 1000000) / tickDuration;
@@ -388,24 +408,37 @@ function cut(
         if (tooEarly || tooLate) {
           // We can't drop control events
           // so let's cram it to the end of the track without changing the time too much
+          // console.log(
+          //   "Cramming in control event at time",
+          //   lastTime,
+          //   ":",
+          //   event.toString()
+          // );
           newTrack.add(lastTime, event);
-          // console.log("Cramming in control event", event.toString());
         } else {
           // This event is within the specified timeframe, so we will have to add it.
           // Do we have to modify the time?
 
           // We will have to adjust the time a little bit
-
-          // We will have to adjust the time a little bit
           if (neededOffset === undefined) {
-            // This is the first sound, let's set a good affset
+            // This is the first sound, let's set a good offset
             neededOffset = wantedStartTime - seconds;
+            console.log(
+              "Since we wanted to start at",
+              wantedStartTime,
+              "sec, and we have found the first wanted control event at",
+              seconds,
+              ", we are setting an offset of",
+              neededOffset
+            );
           }
           const newSeconds = seconds + neededOffset;
 
           const newTicks = (newSeconds * 1000000) / tickDuration;
           // console.log(
           //   "Adding special event at",
+          //   newTicks,
+          //   "ticks",
           //   newSeconds,
           //   "seconds, instead of the original",
           //   seconds,
