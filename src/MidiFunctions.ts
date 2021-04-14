@@ -11,8 +11,8 @@ export function loadMusic(fileName: string): SMF {
   return smf;
 }
 
-export function createMusic(type: number, tempo: number): SMF {
-  return new (JZZ.MIDI as any).SMF(type, tempo);
+export function createMusic(type: number, ppqn: number): SMF {
+  return new (JZZ.MIDI as any).SMF(type, ppqn);
 }
 
 export function saveMusic(music: SMF, fileName: string) {

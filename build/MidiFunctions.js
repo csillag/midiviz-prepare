@@ -11,8 +11,8 @@ function loadMusic(fileName) {
     return smf;
 }
 exports.loadMusic = loadMusic;
-function createMusic(type, tempo) {
-    return new JZZ.MIDI.SMF(type, tempo);
+function createMusic(type, ppqn) {
+    return new JZZ.MIDI.SMF(type, ppqn);
 }
 exports.createMusic = createMusic;
 function saveMusic(music, fileName) {
