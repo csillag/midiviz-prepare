@@ -191,14 +191,17 @@ function adjustTempo(inputFileName, outputFileName, tempoRate) {
         console.error("Error while reading specified input file:", error.message);
         return;
     }
+    var tickUpscaling = 64;
+    var newPPQN = music.ppqn * tickUpscaling;
+    console.log("Upscaling PPQM from", music.ppqn, "to", newPPQN);
     // Create a new MIDI file
-    var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
+    var newMusic = MidiFunctions_1.createMusic(1, newPPQN);
     // Do the processing
     music.forEach(function (track, trackIndex) {
         var newTrack = MidiFunctions_1.addTrack(newMusic);
         console.log("Copying track", trackIndex);
         track.forEach(function (event) {
-            var newTime = Math.round(event.tt / tempoRate);
+            var newTime = Math.round((event.tt * tickUpscaling) / tempoRate);
             newTrack.add(newTime, event);
             // console.log("Event timestamp is", event.tt);
         });
@@ -229,33 +232,65 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
     // Create a new MIDI file
     var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
     // console.log("Cutting segment [", startSeconds, "-", endSeconds, "]...");
+    var tempoRanges = [];
+    function startTempoRange(ticks, tempo) {
+        var startSecond = 0;
+        if (tempoRanges.length) {
+            var lastRange = tempoRanges[tempoRanges.length - 1];
+            if (lastRange.tempo === tempo) {
+                return;
+            }
+            lastRange.endTick = ticks;
+            startSecond = lastRange.endSecond =
+                lastRange.startSecond +
+                    lastRange.tickDuration * (ticks - lastRange.startTick);
+        }
+        var tickDuration = tempo / pulsesPerQuarterNote;
+        var range = {
+            startSecond: startSecond,
+            startTick: ticks,
+            tempo: tempo,
+            tickDuration: tickDuration,
+        };
+        tempoRanges.push(range);
+        console.log("Starting new tempo range:", JSON.stringify(range, null, "  "));
+        // console.log(
+        //   "Starting with tick",
+        //   event.tt,
+        //   "tempo is",
+        //   event.getTempo(),
+        //   "ms / quarter note, so one tick means",
+        //   tickDuration,
+        //   "micro seconds."
+        // );
+    }
+    function findTempoRange(ticks) {
+        return tempoRanges.find(function (r) { return r.startTick <= ticks && (!r.endTick || ticks <= r.endTick); });
+    }
+    function ticksToSeconds(ticks) {
+        if (!ticks) {
+            return 0;
+        }
+        var range = findTempoRange(ticks);
+        if (!range) {
+            throw new Error("Wtf, I don't know what is the tempo at tick " + ticks);
+        }
+        var startTick = range.startTick, startSecond = range.startSecond, tickDuration = range.tickDuration;
+        return startSecond + ((ticks - startTick) * tickDuration) / 1000000;
+    }
     // Do the processing
     music.forEach(function (track, trackIndex) {
         var newTrack = MidiFunctions_1.addTrack(newMusic);
         console.log("Copying track", trackIndex);
-        var tickDuration = NaN;
         var lastTime = 0;
         var droppedNotes = 0;
         var usedNotes = 0;
         var neededOffset;
         track.forEach(function (event) {
             if (event.isTempo()) {
-                if (!isNaN(tickDuration)) {
-                    console.log("oops. We are having a time change within the track. Expect trouble.");
-                }
-                var microsecondsPerQuarterNote = event.getTempo();
-                tickDuration = microsecondsPerQuarterNote / pulsesPerQuarterNote;
-                // console.log(
-                //   "Starting with tick",
-                //   event.tt,
-                //   "tempo is",
-                //   event.getTempo(),
-                //   "ms / quarter note, so one tick means",
-                //   tickDuration,
-                //   "micro seconds."
-                // );
+                startTempoRange(event.tt, event.getTempo());
             }
-            var seconds = event.tt ? (event.tt * tickDuration) / 1000000 : 0;
+            var seconds = ticksToSeconds(event.tt);
             var tooEarly = seconds < startSeconds;
             var tooLate = !!endSeconds && seconds > endSeconds;
             // console.log(
@@ -303,7 +338,7 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
                     if (neededOffset === undefined) {
                         // This is the first sound, let's set a good affset
                         neededOffset = wantedStartTime - seconds;
-                        console.log("Since we wanted to start at", wantedStartTime, "sec, and we have found the first sound at", seconds, ", we are setting an offset of", neededOffset);
+                        console.log("Since we wanted to start at", wantedStartTime, "sec, and we have found the first sound at", seconds, "(", event.tt, "ticks)", ", we are setting an offset of", neededOffset);
                     }
                     var newSeconds = seconds + neededOffset;
                     var newTicks = (newSeconds * 1000000) / tickDuration;
@@ -343,7 +378,9 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
                         console.log("Since we wanted to start at", wantedStartTime, "sec, and we have found the first wanted control event at", seconds, ", we are setting an offset of", neededOffset);
                     }
                     var newSeconds = seconds + neededOffset;
-                    var newTicks = (newSeconds * 1000000) / tickDuration;
+                    var newTicks = !!newSeconds
+                        ? (newSeconds * 1000000) / tickDuration
+                        : 0;
                     // console.log(
                     //   "Adding special event at",
                     //   newTicks,
