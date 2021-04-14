@@ -14,6 +14,7 @@ import {
   saveMusic,
 } from "./MidiFunctions";
 import { MIDI } from "./JZZTypes";
+import { startTempoRange, ticksToSeconds } from "./tempo";
 
 const minorNotes = [1, 3, 6, 8, 10];
 
@@ -282,15 +283,6 @@ function adjustTempo(
   }
 }
 
-interface TempoRange {
-  startTick: number;
-  endTick?: number;
-  startSecond: number;
-  endSecond?: number;
-  tempo: number;
-  tickDuration: number;
-}
-
 function cut(
   inputFileName: string,
   outputFileName: string,
@@ -315,58 +307,6 @@ function cut(
 
   // console.log("Cutting segment [", startSeconds, "-", endSeconds, "]...");
 
-  const tempoRanges: TempoRange[] = [];
-
-  function startTempoRange(ticks: number, tempo: number) {
-    let startSecond = 0;
-    if (tempoRanges.length) {
-      const lastRange = tempoRanges[tempoRanges.length - 1];
-      if (lastRange.tempo === tempo) {
-        return;
-      }
-      lastRange.endTick = ticks;
-      startSecond = lastRange.endSecond =
-        lastRange.startSecond +
-        lastRange.tickDuration * (ticks - lastRange.startTick);
-    }
-    const tickDuration = tempo / pulsesPerQuarterNote;
-    const range: TempoRange = {
-      startSecond,
-      startTick: ticks,
-      tempo,
-      tickDuration,
-    };
-    tempoRanges.push(range);
-    console.log("Starting new tempo range:", JSON.stringify(range, null, "  "));
-    // console.log(
-    //   "Starting with tick",
-    //   event.tt,
-    //   "tempo is",
-    //   event.getTempo(),
-    //   "ms / quarter note, so one tick means",
-    //   tickDuration,
-    //   "micro seconds."
-    // );
-  }
-
-  function findTempoRange(ticks: number): TempoRange | undefined {
-    return tempoRanges.find(
-      (r) => r.startTick <= ticks && (!r.endTick || ticks <= r.endTick)
-    );
-  }
-
-  function ticksToSeconds(ticks: number): number {
-    if (!ticks) {
-      return 0;
-    }
-    const range = findTempoRange(ticks);
-    if (!range) {
-      throw new Error("Wtf, I don't know what is the tempo at tick " + ticks);
-    }
-    const { startTick, startSecond, tickDuration } = range;
-    return startSecond + ((ticks - startTick) * tickDuration) / 1000000;
-  }
-
   // Do the processing
   music.forEach((track, trackIndex) => {
     const newTrack = addTrack(newMusic);
@@ -378,7 +318,7 @@ function cut(
     let neededOffset: number | undefined;
     track.forEach((event) => {
       if (event.isTempo()) {
-        startTempoRange(event.tt, event.getTempo());
+        startTempoRange(pulsesPerQuarterNote, event.tt, event.getTempo());
       }
 
       const seconds = ticksToSeconds(event.tt);
@@ -538,19 +478,12 @@ function dump(inputFileName: string) {
   const pulsesPerQuarterNote = music!.ppqn;
   music.forEach((track, trackIndex) => {
     console.log("Track", trackIndex);
-    let tickDuration: number = NaN;
     track.forEach((event) => {
       if (event.isTempo()) {
-        if (!isNaN(tickDuration)) {
-          console.log(
-            "oops. We are having a time change within the track. Expect trouble."
-          );
-        }
-        const microsecondsPerQuarterNote = event.getTempo();
-        tickDuration = microsecondsPerQuarterNote / pulsesPerQuarterNote;
+        startTempoRange(pulsesPerQuarterNote, event.tt, event.getTempo());
       }
 
-      const seconds = (event.tt * tickDuration) / 1000000;
+      const seconds = ticksToSeconds(event.tt);
       console.log(seconds, event.toString());
     });
   });

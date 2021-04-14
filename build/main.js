@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var commander_1 = require("commander");
 var process = require("process");
 var MidiFunctions_1 = require("./MidiFunctions");
+var tempo_1 = require("./tempo");
 var minorNotes = [1, 3, 6, 8, 10];
 var isMinor = function (note) { return minorNotes.indexOf(note % 12) !== -1; };
 var isMajor = function (note) { return !isMinor(note); };
@@ -232,52 +233,6 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
     // Create a new MIDI file
     var newMusic = MidiFunctions_1.createMusic(1, music.ppqn);
     // console.log("Cutting segment [", startSeconds, "-", endSeconds, "]...");
-    var tempoRanges = [];
-    function startTempoRange(ticks, tempo) {
-        var startSecond = 0;
-        if (tempoRanges.length) {
-            var lastRange = tempoRanges[tempoRanges.length - 1];
-            if (lastRange.tempo === tempo) {
-                return;
-            }
-            lastRange.endTick = ticks;
-            startSecond = lastRange.endSecond =
-                lastRange.startSecond +
-                    lastRange.tickDuration * (ticks - lastRange.startTick);
-        }
-        var tickDuration = tempo / pulsesPerQuarterNote;
-        var range = {
-            startSecond: startSecond,
-            startTick: ticks,
-            tempo: tempo,
-            tickDuration: tickDuration,
-        };
-        tempoRanges.push(range);
-        console.log("Starting new tempo range:", JSON.stringify(range, null, "  "));
-        // console.log(
-        //   "Starting with tick",
-        //   event.tt,
-        //   "tempo is",
-        //   event.getTempo(),
-        //   "ms / quarter note, so one tick means",
-        //   tickDuration,
-        //   "micro seconds."
-        // );
-    }
-    function findTempoRange(ticks) {
-        return tempoRanges.find(function (r) { return r.startTick <= ticks && (!r.endTick || ticks <= r.endTick); });
-    }
-    function ticksToSeconds(ticks) {
-        if (!ticks) {
-            return 0;
-        }
-        var range = findTempoRange(ticks);
-        if (!range) {
-            throw new Error("Wtf, I don't know what is the tempo at tick " + ticks);
-        }
-        var startTick = range.startTick, startSecond = range.startSecond, tickDuration = range.tickDuration;
-        return startSecond + ((ticks - startTick) * tickDuration) / 1000000;
-    }
     // Do the processing
     music.forEach(function (track, trackIndex) {
         var newTrack = MidiFunctions_1.addTrack(newMusic);
@@ -288,9 +243,9 @@ function cut(inputFileName, outputFileName, startSeconds, endSeconds, wantedStar
         var neededOffset;
         track.forEach(function (event) {
             if (event.isTempo()) {
-                startTempoRange(event.tt, event.getTempo());
+                tempo_1.startTempoRange(pulsesPerQuarterNote, event.tt, event.getTempo());
             }
-            var seconds = ticksToSeconds(event.tt);
+            var seconds = tempo_1.ticksToSeconds(event.tt);
             var tooEarly = seconds < startSeconds;
             var tooLate = !!endSeconds && seconds > endSeconds;
             // console.log(
@@ -421,16 +376,11 @@ function dump(inputFileName) {
     var pulsesPerQuarterNote = music.ppqn;
     music.forEach(function (track, trackIndex) {
         console.log("Track", trackIndex);
-        var tickDuration = NaN;
         track.forEach(function (event) {
             if (event.isTempo()) {
-                if (!isNaN(tickDuration)) {
-                    console.log("oops. We are having a time change within the track. Expect trouble.");
-                }
-                var microsecondsPerQuarterNote = event.getTempo();
-                tickDuration = microsecondsPerQuarterNote / pulsesPerQuarterNote;
+                tempo_1.startTempoRange(pulsesPerQuarterNote, event.tt, event.getTempo());
             }
-            var seconds = (event.tt * tickDuration) / 1000000;
+            var seconds = tempo_1.ticksToSeconds(event.tt);
             console.log(seconds, event.toString());
         });
     });
